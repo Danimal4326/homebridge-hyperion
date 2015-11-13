@@ -3,52 +3,23 @@ var Color = require('color');
 var Service, Characteristic;
 
 module.exports = function(homebridge) {
-  Service = homebridge.hap.Service;
-  Characteristic = homebridge.hap.Characteristic;
+    Service = homebridge.hap.Service;
+    Characteristic = homebridge.hap.Characteristic;
+    Accessory = homebridge.hap.Accessory;
+    uuid = homebridge.hap.uuid;
   
-  homebridge.registerAccessory("homebridge-hyperion", "Hyperion", HyperionAccessory);
+    homebridge.registerAccessory("homebridge-hyperion", "Hyperion", HyperionAccessory);
 }
 
 function HyperionAccessory(log, config) {
-  this.log = log;
-  this.host = config["host"];
-  this.port = config["port"];
-  this.name = config["name"];
-  this.color = Color().hsv([0, 0, 0]);
-  this.prevColor = Color().hsv([0,0,100]);
-  this.powerState = false;
-  this.log("Starting Hyperion Accessory");
-
-  this.service = new Service.Lightbulb(this.name);
-  
-  this.service
-    .getCharacteristic(Characteristic.On)
-    .on('get', function(callback) {
-        callback(null, this.powerState);
-    }.bind(this))
-    .on('set', this.setPowerState.bind(this));
-
-  this.service
-    .getCharacteristic(Characteristic.Brightness)
-    .on('get', function(callback) {
-        callback(null, this.color.value());
-    }.bind(this))
-    .on('set', this.setBrightness.bind(this));
-
-  this.service
-    .getCharacteristic(Characteristic.Hue)
-    .on('get', function(callback) {
-        callback(null, this.color.hue());
-    }.bind(this))
-    .on('set', this.setHue.bind(this));
-
-  this.service
-    .getCharacteristic(Characteristic.Saturation)
-    .on('get', function(callback) {
-        callback(null, this.color.saturationv());
-    }.bind(this))
-    .on('set', this.setSaturation.bind(this));
-
+    this.log = log;
+    this.host = config["host"];
+    this.port = config["port"];
+    this.name = config["name"];
+    this.color = Color().hsv([0, 0, 0]);
+    this.prevColor = Color().hsv([0,0,100]);
+    this.powerState = false;
+    this.log("Starting Hyperion Accessory");
 }
 
 HyperionAccessory.prototype.sendHyperionCommand = function(command, cmdParams, callback) {
@@ -145,6 +116,53 @@ HyperionAccessory.prototype.setSaturation = function(level, callback) {
     }.bind(this));
 }
 
+HyperionAccessory.prototype.identify = function(callback) {
+    this.log("IDENTIFY");
+    this.setPowerState(true, function(){});
+
+    setTimeout( function() {
+        this.setPowerState(false,  function(err, result) {});
+    }.bind(this), 500);
+    setTimeout( function() {
+        this.setPowerState(true,  function(err, result) {});
+    }.bind(this), 1000);
+    setTimeout( function() {
+        this.setPowerState(false,  function(err, result) {});
+    }.bind(this), 1500);
+    callback(null);
+}
+
 HyperionAccessory.prototype.getServices = function() {
-    return [this.service];
+
+   var lightbulbService = new Service.Lightbulb(this.name);
+
+    lightbulbService
+        .getCharacteristic(Characteristic.On)
+        .on('get', function(callback) { callback(null, this.powerState); }.bind(this))
+        .on('set', this.setPowerState.bind(this));
+
+    lightbulbService
+        .addCharacteristic(Characteristic.Brightness)
+        .on('get', function(callback) { callback(null, this.color.value()); }.bind(this))
+        .on('set', this.setBrightness.bind(this));
+
+    lightbulbService
+        .addCharacteristic(Characteristic.Hue)
+        .on('get', function(callback) { callback(null, this.color.hue()); }.bind(this))
+        .on('set', this.setHue.bind(this));
+
+    lightbulbService
+        .addCharacteristic(Characteristic.Saturation)
+        .on('get', function(callback) { callback(null, this.color.saturationv()); }.bind(this))
+        .on('set', this.setSaturation.bind(this));
+
+    var informationService = new Service.AccessoryInformation();
+
+    informationService
+        .setCharacteristic(Characteristic.Manufacturer, "Hyperion")
+        .setCharacteristic(Characteristic.Model, this.host)
+        .setCharacteristic(Characteristic.SerialNumber, lightbulbService.UUID);
+
+ 
+    return [informationService, lightbulbService];
 }
