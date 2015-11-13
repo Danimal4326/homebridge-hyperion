@@ -16,24 +16,37 @@ function HyperionAccessory(log, config) {
   this.name = config["name"];
   this.color = Color().hsv([0, 0, 0]);
   this.prevColor = Color().hsv([0,0,100]);
+  this.powerState = false;
   this.log("Starting Hyperion Accessory");
 
   this.service = new Service.Lightbulb(this.name);
   
   this.service
     .getCharacteristic(Characteristic.On)
+    .on('get', function(callback) {
+        callback(null, this.powerState);
+    }.bind(this))
     .on('set', this.setPowerState.bind(this));
 
   this.service
     .getCharacteristic(Characteristic.Brightness)
+    .on('get', function(callback) {
+        callback(null, this.color.value());
+    }.bind(this))
     .on('set', this.setBrightness.bind(this));
 
   this.service
     .getCharacteristic(Characteristic.Hue)
+    .on('get', function(callback) {
+        callback(null, this.color.hue());
+    }.bind(this))
     .on('set', this.setHue.bind(this));
 
   this.service
     .getCharacteristic(Characteristic.Saturation)
+    .on('get', function(callback) {
+        callback(null, this.color.saturationv());
+    }.bind(this))
     .on('set', this.setSaturation.bind(this));
 
 }
@@ -71,16 +84,30 @@ HyperionAccessory.prototype.setPowerState = function(powerOn, callback) {
         this.log("Setting power state on the '"+this.name+"' to on");
         this.color.rgb(this.prevColor.rgb());
         this.sendHyperionCommand('color', this.color.rgbArray(), function(result) {
-            callback(result);
+            if(result == false) {
+                callback(Error("Error setting power state"));
+            } else {
+                this.powerState = true;
+                callback(null, powerOn);
+            }
         }.bind(this));
     } else {
         this.log("Setting power state on the '"+this.name+"' to off");
         this.prevColor.rgb(this.color.rgb());
         this.color.value(0);
         this.sendHyperionCommand('color', this.color.rgbArray(), function(result) {
-            callback(result);
-        }.bind(this));
-        this.sendHyperionCommand('blacklevel', [0,0,0], function(result) {
+            if(!result) {
+                callback(Error("Error setting power state"));
+            } else {
+                this.sendHyperionCommand('blacklevel', [0,0,0], function(result) {
+                    if(result == false) {
+                        callback(Error("Error setting power state"));
+                    } else {
+                        this.powerState = false;
+                        callback(null, powerOn);
+                    }
+                }.bind(this));
+            }
         }.bind(this));
     }
 }
@@ -89,7 +116,12 @@ HyperionAccessory.prototype.setBrightness = function(level, callback) {
     this.color.value(level);
     this.log("Setting brightness on the '"+this.name+"' to '" + level + "'");
     this.sendHyperionCommand('color', this.color.rgbArray(), function(result) {
-        callback(result);
+        if (level ==  0 ) {
+            this.powerState = false;
+        } else {
+            this.powerState = true;
+        }
+        callback(null, this.color.value());
     }.bind(this));
 }
 
@@ -98,7 +130,8 @@ HyperionAccessory.prototype.setHue = function(level, callback) {
     this.prevColor.hue(level);
     this.log("Setting hue on the '"+this.name+"' to '" + level + "'");
     this.sendHyperionCommand('color', this.color.rgbArray(), function(result) {
-        callback(result);
+        this.powerState = true;
+        callback(null, this.color.hue());
     }.bind(this));
 }
 
@@ -107,7 +140,8 @@ HyperionAccessory.prototype.setSaturation = function(level, callback) {
     this.prevColor.saturationv(level);
     this.log("Setting saturation on the '"+this.name+"' to '" + level + "'");
     this.sendHyperionCommand('color', this.color.rgbArray(), function(result) {
-        callback(result);
+        this.powerState = true;
+        callback(null, this.color.saturationv());
     }.bind(this));
 }
 
