@@ -1,6 +1,6 @@
 {
   "name": "homebridge-hyperion",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Hyperion plugin for homebridge: https://github.com/nfarina/homebridge",
   "license": "ISC",
   "keywords": [
