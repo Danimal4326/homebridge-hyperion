@@ -140,8 +140,6 @@ HyperionAccessory.prototype.setSaturation = function(level, callback) {
 
 HyperionAccessory.prototype.identify = function(callback) {
     this.log("Identify");
-    
-    var current_color = this.color;
 
     this.sendHyperionCommand('powerMode', Color().value(0), function(err, new_color) {});
 
