@@ -20,7 +20,7 @@ Configuration sample:
             {
                 "accessory": "Hyperion",
                 "name": "TV Backlight",
-                "ambilight_name": "Ambilight"
+                "ambilight_name": "Ambilight",
                 "host": "localhost",
                 "port": "19444"
             }
