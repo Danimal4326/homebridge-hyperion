@@ -21,6 +21,7 @@ Configuration sample:
                 "accessory": "Hyperion",
                 "name": "TV Backlight",
                 "ambilight_name": "Ambilight",
+                "priority": "100",
                 "host": "localhost",
                 "port": "19444"
             }
@@ -32,5 +33,6 @@ Fields:
 * "accessory": Must always be "Hyperion" (required)
 * "name": Can be anything (required)
 * "ambilight_name": Can be anything (optional, creates a switch to turn ambilight on/off.)
+* "priority": Hyperion priority channel (lower value means higher priority)
 * "host": The hostname or ip of the machine running Hyperion (required)
 * "port": The port that Hyperion is using (usually 19444) (required)
