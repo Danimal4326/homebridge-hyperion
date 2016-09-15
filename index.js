@@ -17,6 +17,7 @@ function HyperionAccessory(log, config) {
     this.port       = config["port"];
     this.name       = config["name"];
     this.ambi_name  = config["ambilight_name"];
+    this.priority   = config["priority"];
     this.color      = Color().hsv([0, 0, 0]);
     this.prevColor  = Color().hsv([0, 0, 100]);
     this.powerState = 0;
@@ -36,7 +37,7 @@ HyperionAccessory.prototype.sendHyperionCommand = function(command, color, callb
             });
             commands.push( {
                 command: "color",
-                priority: 100,
+                priority: that.priority,
                 color: color.rgbArray()
             });
             commands.push( {
@@ -50,7 +51,7 @@ HyperionAccessory.prototype.sendHyperionCommand = function(command, color, callb
          case 'color':
             commands.push( {
                 command: "color",
-                priority: 100,
+                priority: that.priority,
                 color: color.rgbArray()
             });
             break;
