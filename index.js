@@ -18,8 +18,8 @@ function HyperionAccessory(log, config) {
     this.name       = config["name"];
     this.ambi_name  = config["ambilight_name"];
     this.priority   = parseInt(config["priority"]) || 100;
-    this.color      = Color().hsv([0, 0, 0]);
-    this.prevColor  = Color().hsv([0, 0, 100]);
+    this.color      = Color().rgb([0, 0, 0]);
+    this.prevColor  = Color().rgb([255, 255, 255]);
     this.powerState = 0;
     this.ambiState  = 0;
     this.log("Starting Hyperion Accessory");
@@ -94,6 +94,9 @@ HyperionAccessory.prototype.setPowerState = function (powerOn, callback) {
                 this.ambiState = 0;
                 this.log("ambi state " + this.ambiState);
                 this.color.rgb(new_color.rgb());
+                if (powerOn) {
+                    this.prevColor.rgb(new_color.rgb());
+                }
             }
             callback(err, this.powerState);
         }.bind(this));
@@ -103,22 +106,25 @@ HyperionAccessory.prototype.setPowerState = function (powerOn, callback) {
     }
 }
 
+HyperionAccessory.prototype.getPowerState = function (callback) {
+    callback(null, this.powerState);
+}
+
 HyperionAccessory.prototype.setBrightness = function (level, callback) {
     this.log("Setting brightness on the '" + this.name + "' to '" + level + "'");
-    this.sendHyperionCommand('color', Color(this.color).value(level), function (err, new_color) {
+    this.sendHyperionCommand('color', Color(this.prevColor).value(level), function (err, new_color) {
         if (!err) {
-            if (new_color.value() == 0) {
-                this.powerState = 0;
-            } else {
-                this.powerState = 1;
-                this.ambiState = 0;
-                this.log("ambi state " + this.ambiState);
-                this.prevColor.value(new_color.value());
-            }
+            this.ambiState = 0;
+            this.log("ambi state " + this.ambiState);
+            this.prevColor.value(new_color.value());
             this.color.value(new_color.value());
         }
         callback(err, this.color.value());
     }.bind(this));
+}
+
+HyperionAccessory.prototype.getBrightness = function (callback) {
+    callback(null, this.color.value());
 }
 
 HyperionAccessory.prototype.setHue = function (level, callback) {
@@ -132,6 +138,10 @@ HyperionAccessory.prototype.setHue = function (level, callback) {
     }.bind(this));
 }
 
+HyperionAccessory.prototype.getHue = function (callback) {
+    callback(null, this.color.hue());
+}
+
 HyperionAccessory.prototype.setSaturation = function (level, callback) {
     this.log("Setting saturation on the '" + this.name + "' to '" + level + "'");
     this.sendHyperionCommand('color', Color(this.color).saturationv(level), function (err, new_color) {
@@ -141,6 +151,40 @@ HyperionAccessory.prototype.setSaturation = function (level, callback) {
         }
         callback(err, this.color.saturationv());
     }.bind(this));
+}
+
+HyperionAccessory.prototype.getSaturation = function (callback) {
+    callback(null, this.color.saturationv());
+}
+
+HyperionAccessory.prototype.setAmbiState = function (ambiState, callback) {
+    
+    var command;
+
+    if (ambiState) {
+        command = 'clearall';
+    } else {
+        command = 'powerMode';
+    }
+
+    if (ambiState != this.ambiState) {
+        this.sendHyperionCommand(command, Color().value(0), function (err, new_color) {
+            if (!err) {
+                this.ambiState = ambiState;
+                this.log("ambi state " + this.ambiState);
+                this.powerState = 0;
+                this.color.value(0);
+            }
+            callback(err, this.ambiState)
+        }.bind(this));
+    }
+    else {
+        callback(null, this.ambiState);
+    }
+}
+
+HyperionAccessory.prototype.getAmbiState = function (callback) {
+    callback(null, this.ambiState);
 }
 
 HyperionAccessory.prototype.identify = function (callback) {
@@ -174,51 +218,34 @@ HyperionAccessory.prototype.getServices = function () {
 
     lightbulbService
         .getCharacteristic(Characteristic.On)
-        .on('get', function (callback) { callback(null, this.powerState); }.bind(this))
-        .on('set', this.setPowerState.bind(this));
+        .on('set', this.setPowerState.bind(this))
+        .on('get', this.getPowerState.bind(this));
 
     lightbulbService
         .addCharacteristic(Characteristic.Brightness)
-        .on('get', function (callback) { callback(null, this.prevColor.value()); }.bind(this))
-        .on('set', this.setBrightness.bind(this));
+        .on('set', this.setBrightness.bind(this))
+        .on('get', this.getBrightness.bind(this))
 
     lightbulbService
         .addCharacteristic(Characteristic.Hue)
-        .on('get', function (callback) { callback(null, this.prevColor.hue()); }.bind(this))
-        .on('set', this.setHue.bind(this));
+        .on('set', this.setHue.bind(this))
+        .on('get', this.getHue.bind(this));
 
     lightbulbService
         .addCharacteristic(Characteristic.Saturation)
-        .on('get', function (callback) { callback(null, this.prevColor.saturationv()); }.bind(this))
-        .on('set', this.setSaturation.bind(this));
+        .on('set', this.setSaturation.bind(this))
+        .on('get', this.getSaturation.bind(this));
 
 
     if (this.ambi_name) {
         var switchService = new Service.Switch(this.ambi_name);
+        
         availableServices.push(switchService);
-
-        var command;
 
         switchService
             .getCharacteristic(Characteristic.On)
-            .on('get', function (callback) { callback(null, this.ambiState); }.bind(this))
-            .on('set', function (powerState, callback) {
-                if (powerState) {
-                    command = 'clearall';
-                } else {
-                    command = 'powerMode';
-                }
-                this.sendHyperionCommand(command, Color().value(0), function (err, new_color) {
-                    if (!err) {
-                        this.ambiState = powerState;
-                        this.log("ambi state " + this.ambiState);
-                        this.powerState = 0;
-                        this.color.value(0);
-                    }
-                    callback(err, this.ambiState)
-                }.bind(this));
-            }.bind(this));
-
+            .on('set', this.setAmbiState.bind(this))
+            .on('get', this.getAmbiState.bind(this));
     }
 
     var informationService = new Service.AccessoryInformation();
