@@ -130,7 +130,7 @@ HyperionAccessory.prototype.getBrightness = function (callback) {
 HyperionAccessory.prototype.setHue = function (level, callback) {
     this.log("Setting hue on the '" + this.name + "' to '" + level + "'");
 
-    this.sendHyperionCommand('color', Color(this.prevColor).hue(level), function (err, new_color) {
+    this.sendHyperionCommand('color', Color(this.color).hue(level), function (err, new_color) {
         if (!err) {
             this.color.hue(new_color.hue());
             this.prevColor.hue(new_color.hue());
@@ -146,7 +146,7 @@ HyperionAccessory.prototype.getHue = function (callback) {
 HyperionAccessory.prototype.setSaturation = function (level, callback) {
     this.log("Setting saturation on the '" + this.name + "' to '" + level + "'");
     
-    this.sendHyperionCommand('color', Color(this.prevColor).saturationv(level), function (err, new_color) {
+    this.sendHyperionCommand('color', Color(this.color).saturationv(level), function (err, new_color) {
         if (!err) {
             this.color.saturationv(new_color.saturationv());
             this.prevColor.saturationv(new_color.saturationv());
