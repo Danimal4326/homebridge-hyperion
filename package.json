@@ -1,6 +1,6 @@
 {
   "name": "homebridge-hyperion",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "Hyperion plugin for homebridge: https://github.com/nfarina/homebridge",
   "license": "ISC",
   "keywords": [
@@ -15,7 +15,7 @@
     "homebridge": ">=0.2.0"
   },
   "dependencies": {
-    "color": ">=0.10.0"
+    "color": ">=0.11.3"
   },
   "main": "index.js",
   "author": "Dan Chlopek"
