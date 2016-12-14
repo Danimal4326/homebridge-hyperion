@@ -2,12 +2,12 @@ var net = require('net');
 var Color = require('color');
 var Service, Characteristic;
 
-module.exports = function(homebridge) {
+module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
     Accessory = homebridge.hap.Accessory;
     uuid = homebridge.hap.uuid;
-  
+
     homebridge.registerAccessory("homebridge-hyperion", "Hyperion", HyperionAccessory);
 }
 
@@ -17,109 +17,120 @@ function HyperionAccessory(log, config) {
     this.port       = config["port"];
     this.name       = config["name"];
     this.ambi_name  = config["ambilight_name"];
-    this.priority   = config["priority"];
-    this.color      = Color().hsv([0, 0, 0]);
-    this.prevColor  = Color().hsv([0, 0, 100]);
-    this.powerState = 0;
-    this.ambiState  = 0;
+    this.priority   = parseInt(config["priority"]) || 100;
+    this.color      = Color().rgb([0, 0, 0]);
+    this.prevColor  = Color().rgb([255, 255, 255]);
+    this.lightService;
+    this.ambiService;
+    this.infoService;
     this.log("Starting Hyperion Accessory");
-}
+   }
 
-HyperionAccessory.prototype.sendHyperionCommand = function(command, color, callback) {
+HyperionAccessory.prototype.sendHyperionCommand = function (command, color, callback) {
     var client = new net.Socket();
     var commands = [];
-    var that = this;
 
     switch (command) {
         case 'powerMode':
-            commands.push( {
+            commands.push({
                 command: "clearall"
             });
-            commands.push( {
+            commands.push({
                 command: "color",
-                priority: that.priority,
+                priority: this.priority,
                 color: color.rgbArray()
             });
-            commands.push( {
+            commands.push({
                 command: "transform",
                 transform: {
-                    blacklevel: [0,0,0],
-                    whitelevel: [1,1,1]
+                    blacklevel: [0, 0, 0],
+                    whitelevel: [1, 1, 1]
                 }
             });
             break;
-         case 'color':
-            commands.push( {
+        case 'color':
+            commands.push({
                 command: "color",
-                priority: that.priority,
+                priority: this.priority,
                 color: color.rgbArray()
             });
             break;
-         case 'clearall':
-            commands.push( {
+        case 'ambilight':
+            commands.push({
                 command: "clearall"
             });
             break;
     }
 
-    client.connect(that.port, that.host, function() {
-        while (commands.length){
+    client.connect(this.port, this.host, function () {
+        while (commands.length) {
             var current_command = commands.shift();
             client.write(JSON.stringify(current_command) + "\n");
         }
         client.end();
-        that.log("Current Color(RGB): " + color.rgbArray());
+        this.log("Current Color(RGB): " + color.rgbArray());
         callback(null, color);
-    });
-    
-    client.on('error', function(err){
-        that.log("Could not send command '" + command + "' with color '" + color.rgbArray() + "'");
-        callback(err, that.prevColor);
-    });
-}
+    }.bind(this));
 
-HyperionAccessory.prototype.setPowerState = function(powerOn, callback) {
-    var color_to_set;
-
-    if (powerOn) {
-        this.log("Setting power state on the '"+this.name+"' to on");
-        color_to_set = this.prevColor;
-    } else {
-        this.log("Setting power state on the '"+this.name+"' to off");
-        color_to_set = Color().value(0);
-    }
-    this.sendHyperionCommand('powerMode', color_to_set, function(err, new_color) {
-        if (!err) {
-            this.powerState = (new_color.value() > 0)? 1 : 0;
-            this.ambiState  = 0;
-            this.log("ambi state" + this.ambiState);
-            this.color.rgb(new_color.rgb());
-        }
-        callback(err, this.powerState);
+    client.on('error', function (err) {
+        this.log("Could not send command '" + command + "' with color '" + color.rgbArray() + "'");
+        callback(err, this.prevColor);
     }.bind(this));
 }
 
-HyperionAccessory.prototype.setBrightness = function(level, callback) {
-    this.log("Setting brightness on the '"+this.name+"' to '" + level + "'");
-    this.sendHyperionCommand('color', Color(this.color).value(level), function(err, new_color) {
+HyperionAccessory.prototype.setPowerState = function (state, callback) {
+    var color_to_set;
+
+    if (state) {
+        this.log("Setting power state on the '" + this.name + "' to on");
+        color_to_set = this.prevColor;
+    } else {
+        this.log("Setting power state on the '" + this.name + "' to off");
+        color_to_set = Color().value(0);
+    }
+
+    this.sendHyperionCommand('powerMode', color_to_set, function (err, new_color) {
         if (!err) {
-            if (new_color.value() ==  0 ) {
-                this.powerState = 0;
-            } else {
-                this.powerState = 1;
-                this.ambiState  = 0;
-            this.log("ambi state" + this.ambiState);
-                this.prevColor.value(new_color.value());
+            if (this.ambi_name && state) {
+                this.ambiService.updateCharacteristic(Characteristic.On, 0);
+                this.log("Setting ambi state to: " + 0);
             }
+            this.color.rgb(new_color.rgb());
+            if (state) {
+                this.prevColor.rgb(new_color.rgb());
+            }
+        }
+        callback(err, state);
+    }.bind(this));
+}
+
+HyperionAccessory.prototype.setBrightness = function (level, callback) {
+    this.log("Setting brightness on the '" + this.name + "' to '" + level + "'");
+    
+    this.sendHyperionCommand('color', Color(this.prevColor).value(level), function (err, new_color) {
+        if (!err) {
+            if (this.ambi_name) {
+                this.ambiService.updateCharacteristic(Characteristic.On, 0);
+                this.log("Setting ambi state to: " + 0);
+            }
+            if (level > 0) {
+                this.lightService.updateCharacteristic(Characteristic.On, 1);
+            }
+            this.prevColor.value(new_color.value());
             this.color.value(new_color.value());
         }
         callback(err, this.color.value());
     }.bind(this));
 }
 
-HyperionAccessory.prototype.setHue = function(level, callback) {
-    this.log("Setting hue on the '"+this.name+"' to '" + level + "'");
-    this.sendHyperionCommand('color', Color(this.color).hue(level), function(err, new_color) {
+HyperionAccessory.prototype.getBrightness = function (callback) {
+    callback(null, this.color.value());
+}
+
+HyperionAccessory.prototype.setHue = function (level, callback) {
+    this.log("Setting hue on the '" + this.name + "' to '" + level + "'");
+
+    this.sendHyperionCommand('color', Color(this.color).hue(level), function (err, new_color) {
         if (!err) {
             this.color.hue(new_color.hue());
             this.prevColor.hue(new_color.hue());
@@ -128,9 +139,14 @@ HyperionAccessory.prototype.setHue = function(level, callback) {
     }.bind(this));
 }
 
-HyperionAccessory.prototype.setSaturation = function(level, callback) {
-    this.log("Setting saturation on the '"+this.name+"' to '" + level + "'");
-    this.sendHyperionCommand('color', Color(this.color).saturationv(level), function(err, new_color) {
+HyperionAccessory.prototype.getHue = function (callback) {
+    callback(null, this.color.hue());
+}
+
+HyperionAccessory.prototype.setSaturation = function (level, callback) {
+    this.log("Setting saturation on the '" + this.name + "' to '" + level + "'");
+    
+    this.sendHyperionCommand('color', Color(this.color).saturationv(level), function (err, new_color) {
         if (!err) {
             this.color.saturationv(new_color.saturationv());
             this.prevColor.saturationv(new_color.saturationv());
@@ -139,91 +155,99 @@ HyperionAccessory.prototype.setSaturation = function(level, callback) {
     }.bind(this));
 }
 
-HyperionAccessory.prototype.identify = function(callback) {
+HyperionAccessory.prototype.getSaturation = function (callback) {
+    callback(null, this.color.saturationv());
+}
+
+HyperionAccessory.prototype.setAmbiState = function (state, callback) {
+    
+    var command;
+
+    if (state) {
+        command = 'ambilight';
+    } else {
+        command = 'powerMode';
+    }
+
+    this.sendHyperionCommand(command, Color().value(0), function (err, new_color) {
+        if (!err) {
+            this.log("Setting ambi state to: " + state);
+            if (state) {
+                this.lightService.updateCharacteristic(Characteristic.On, 0);
+                this.log("Setting power state on the '" + this.name + "' to off");
+            }
+            this.color.value(0);
+        }
+        callback(err, state)
+    }.bind(this));
+}
+
+HyperionAccessory.prototype.identify = function (callback) {
     this.log("Identify");
 
-    this.sendHyperionCommand('powerMode', Color().value(0), function(err, new_color) {});
+    this.sendHyperionCommand('powerMode', Color().value(0), function (err, new_color) { });
 
-    setTimeout( function() {
-        this.sendHyperionCommand('powerMode', Color().value(100), function(err, new_color) {});
+    setTimeout(function () {
+        this.sendHyperionCommand('powerMode', Color().value(100), function (err, new_color) { });
     }.bind(this), 500);
-    setTimeout( function() {
-        this.sendHyperionCommand('powerMode', Color().value(0), function(err, new_color) {});
+    setTimeout(function () {
+        this.sendHyperionCommand('powerMode', Color().value(0), function (err, new_color) { });
     }.bind(this), 1000);
-    setTimeout( function() {
-        this.sendHyperionCommand('powerMode', Color().value(100), function(err, new_color) {});
+    setTimeout(function () {
+        this.sendHyperionCommand('powerMode', Color().value(100), function (err, new_color) { });
     }.bind(this), 1500);
-    setTimeout( function() {
-        this.sendHyperionCommand('powerMode', Color().value(0), function(err, new_color) {});
+    setTimeout(function () {
+        this.sendHyperionCommand('powerMode', Color().value(0), function (err, new_color) { });
     }.bind(this), 2000);
-    setTimeout( function() {
-        this.sendHyperionCommand('color', this.color, function(err, result) {callback(err, true)});
+    setTimeout(function () {
+        this.sendHyperionCommand('color', this.color, function (err, result) { callback(err, true) });
     }.bind(this), 2500);
 }
 
-HyperionAccessory.prototype.getServices = function() {
+HyperionAccessory.prototype.getServices = function () {
 
     var availableServices = [];
 
-    var lightbulbService = new Service.Lightbulb(this.name);
-    availableServices.push(lightbulbService);
+    this.lightService = new Service.Lightbulb(this.name);
+    availableServices.push(this.lightService);
 
-    lightbulbService
+    this.lightService
         .getCharacteristic(Characteristic.On)
-        .on('get', function(callback) { callback(null, this.powerState); }.bind(this))
         .on('set', this.setPowerState.bind(this));
 
-    lightbulbService
+    this.lightService
         .addCharacteristic(Characteristic.Brightness)
-        .on('get', function(callback) { callback(null, this.prevColor.value()); }.bind(this))
-        .on('set', this.setBrightness.bind(this));
+        .on('set', this.setBrightness.bind(this))
+        .on('get', this.getBrightness.bind(this))
 
-    lightbulbService
+    this.lightService
         .addCharacteristic(Characteristic.Hue)
-        .on('get', function(callback) { callback(null, this.prevColor.hue()); }.bind(this))
-        .on('set', this.setHue.bind(this));
+        .on('set', this.setHue.bind(this))
+        .on('get', this.getHue.bind(this));
 
-    lightbulbService
+    this.lightService
         .addCharacteristic(Characteristic.Saturation)
-        .on('get', function(callback) { callback(null, this.prevColor.saturationv()); }.bind(this))
-        .on('set', this.setSaturation.bind(this));
- 
+        .on('set', this.setSaturation.bind(this))
+        .on('get', this.getSaturation.bind(this));
+
 
     if (this.ambi_name) {
-        var switchService = new Service.Switch(this.ambi_name);
-        availableServices.push(switchService);
+        this.ambiService = new Service.Switch(this.ambi_name);
         
-        var command;
+        availableServices.push(this.ambiService);
 
-        switchService
+        this.ambiService
             .getCharacteristic(Characteristic.On)
-            .on('get', function(callback) { callback(null, this.ambiState); }.bind(this))
-            .on('set', function(powerState, callback) {
-                if (powerState) {
-                    command = 'clearall'; 
-                } else {
-                    command = 'powerMode'; 
-                }
-                this.sendHyperionCommand(command, Color().value(0), function(err, new_color) {
-                    if (!err) {
-                        this.ambiState = powerState;
-            this.log("ambi state" + this.ambiState);
-                        this.powerState = 0;
-                        this.color.value(0);
-                    }
-                    callback(err, this.ambiState) }.bind(this)
-                    );
-            }.bind(this));
-
+            .on('set', this.setAmbiState.bind(this));
     }
 
-    var informationService = new Service.AccessoryInformation();
-    availableServices.push(informationService);
+    this.infoService = new Service.AccessoryInformation();
+    availableServices.push(this.infoService);
 
-    informationService
+    this.infoService
         .setCharacteristic(Characteristic.Manufacturer, "Hyperion")
         .setCharacteristic(Characteristic.Model, this.host)
-        .setCharacteristic(Characteristic.SerialNumber, lightbulbService.UUID);
+        .setCharacteristic(Characteristic.SerialNumber, this.lightService.UUID);
 
     return availableServices;
 }
