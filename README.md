@@ -1,3 +1,6 @@
+# This repository has been archived and is no longer maintained!!!
+# It may or may not work with your setup.  If issues arise, please feel free to fork and fix for yourself.
+
 # homebridge-hyperion
 [Homebridge](https://github.com/nfarina/homebridge) accessory plugin for Hyperion
 
